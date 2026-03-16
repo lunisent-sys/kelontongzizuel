@@ -9,7 +9,7 @@ const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ================== KONSTANTA ==================
 const WA_NUMBER = '62895630307497';
 const ADMIN_USERNAME = 'ownerzizuel';
-const ADMIN_PASSWORD = 'tokokelontongzizuel';
+const ADMIN_EMAIL = 'admin@zizuel.local';
 
 // ================== STATE ==================
 let currentUser = null;
@@ -91,16 +91,37 @@ async function loadSettings() {
 // ================== SAVE TO SUPABASE ==================
 async function saveSettings(updates) {
     try {
-        const { error } = await supabaseClient
+        // Cek apakah settings sudah ada
+        const { data: existing } = await supabaseClient
             .from('settings')
-            .upsert({
-                id: 1,
-                store_header: updates.description || settings.description,
-                store_logo: updates.logo || settings.logo,
-                music_url: updates.music || settings.music
-            });
+            .select('id')
+            .eq('id', 1)
+            .maybeSingle();
         
-        if (error) throw error;
+        let result;
+        if (existing) {
+            // UPDATE
+            result = await supabaseClient
+                .from('settings')
+                .update({
+                    store_header: updates.description || settings.description,
+                    store_logo: updates.logo || settings.logo,
+                    music_url: updates.music || settings.music
+                })
+                .eq('id', 1);
+        } else {
+            // INSERT
+            result = await supabaseClient
+                .from('settings')
+                .insert([{
+                    id: 1,
+                    store_header: updates.description || settings.description,
+                    store_logo: updates.logo || settings.logo,
+                    music_url: updates.music || settings.music
+                }]);
+        }
+        
+        if (result.error) throw result.error;
         
         if (updates.description) settings.description = updates.description;
         if (updates.logo) settings.logo = updates.logo;
@@ -123,7 +144,7 @@ async function saveProduct(product) {
                 harga: product.harga,
                 deskripsi: product.deskripsi || '',
                 image: product.image || '',
-                user_id: currentUser?.username || 'admin'
+                user_id: currentUser?.email || 'admin'
             }])
             .select();
         
@@ -165,38 +186,6 @@ async function deleteProduct(id) {
     }
 }
 
-// ================== USER MANAGEMENT ==================
-let users = [];
-
-function loadUsers() {
-    const stored = localStorage.getItem('tokozizuel_users');
-    if (stored) {
-        try {
-            users = JSON.parse(stored);
-        } catch (e) {}
-    }
-    
-    if (!users) users = [];
-    
-    const adminExists = users.some(u => u.username === ADMIN_USERNAME);
-    if (!adminExists) {
-        users.push({
-            username: ADMIN_USERNAME,
-            password: ADMIN_PASSWORD,
-            email: 'admin@zizuel.local',
-            role: 'admin'
-        });
-    }
-    
-    saveUsers();
-}
-
-function saveUsers() {
-    localStorage.setItem('tokozizuel_users', JSON.stringify(users));
-}
-
-loadUsers();
-
 // ================== RENDER LOGIN PAGE ==================
 function renderLoginPage() {
     // Sembunyikan footer
@@ -234,6 +223,140 @@ function renderLoginPage() {
     `;
     
     attachLoginEvents();
+}
+
+// ================== LOGIN EVENTS ==================
+function attachLoginEvents() {
+    document.getElementById('showRegister')?.addEventListener('click', () => {
+        document.getElementById('loginPanel').style.display = 'none';
+        document.getElementById('registerPanel').style.display = 'block';
+    });
+    
+    document.getElementById('showLogin')?.addEventListener('click', () => {
+        document.getElementById('registerPanel').style.display = 'none';
+        document.getElementById('loginPanel').style.display = 'block';
+    });
+    
+    document.getElementById('doLogin').addEventListener('click', async () => {
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value.trim();
+        const msg = document.getElementById('loginMessage');
+        
+        if (!username || !password) {
+            msg.className = 'login-message error';
+            msg.textContent = 'Username dan password harus diisi';
+            msg.style.display = 'block';
+            return;
+        }
+        
+        showLoading();
+        
+        try {
+            // Login via Supabase Auth
+            // Asumsi email = username + '@zizuel.local'
+            const email = username.includes('@') ? username : username + '@zizuel.local';
+            
+            const { data, error } = await supabaseClient.auth.signInWithPassword({
+                email: email,
+                password: password
+            });
+            
+            if (error) throw error;
+            
+            if (data.user) {
+                // Cek role dari email
+                const role = data.user.email === ADMIN_EMAIL ? 'admin' : 'user';
+                
+                currentUser = {
+                    username: username,
+                    email: data.user.email,
+                    role: role,
+                    id: data.user.id
+                };
+                
+                localStorage.setItem('tokozizuel_currentUser', JSON.stringify({
+                    username: username,
+                    role: role,
+                    email: data.user.email
+                }));
+                
+                msg.className = 'login-message success';
+                msg.textContent = 'Berhasil masuk!';
+                msg.style.display = 'block';
+                
+                setTimeout(() => {
+                    renderMainPage();
+                }, 500);
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            msg.className = 'login-message error';
+            msg.textContent = 'Username/password salah';
+            msg.style.display = 'block';
+        } finally {
+            hideLoading();
+        }
+    });
+    
+    document.getElementById('doRegister').addEventListener('click', async () => {
+        const username = document.getElementById('regUsername').value.trim();
+        const email = document.getElementById('regEmail').value.trim();
+        const password = document.getElementById('regPassword').value.trim();
+        const msg = document.getElementById('registerMessage');
+        
+        if (!username || !email || !password) {
+            msg.className = 'login-message error';
+            msg.textContent = 'Semua field harus diisi';
+            msg.style.display = 'block';
+            return;
+        }
+        
+        if (!email.includes('@') || !email.includes('.')) {
+            msg.className = 'login-message error';
+            msg.textContent = 'Email tidak valid';
+            msg.style.display = 'block';
+            return;
+        }
+        
+        showLoading();
+        
+        try {
+            // Register via Supabase Auth
+            const { data, error } = await supabaseClient.auth.signUp({
+                email: email,
+                password: password,
+                options: {
+                    data: {
+                        username: username,
+                        role: 'user'
+                    }
+                }
+            });
+            
+            if (error) throw error;
+            
+            msg.className = 'login-message success';
+            msg.textContent = 'Registrasi berhasil! Silakan cek email untuk verifikasi.';
+            msg.style.display = 'block';
+            
+            document.getElementById('regUsername').value = '';
+            document.getElementById('regEmail').value = '';
+            document.getElementById('regPassword').value = '';
+            
+            setTimeout(() => {
+                document.getElementById('registerPanel').style.display = 'none';
+                document.getElementById('loginPanel').style.display = 'block';
+            }, 3000);
+            
+        } catch (error) {
+            console.error('Register error:', error);
+            msg.className = 'login-message error';
+            msg.textContent = error.message || 'Gagal registrasi';
+            msg.style.display = 'block';
+        } finally {
+            hideLoading();
+        }
+    });
 }
 
 // ================== RENDER MAIN PAGE ==================
@@ -312,94 +435,6 @@ async function renderMainPage() {
     }
     
     hideLoading();
-}
-
-// ================== LOGIN EVENTS ==================
-function attachLoginEvents() {
-    document.getElementById('showRegister')?.addEventListener('click', () => {
-        document.getElementById('loginPanel').style.display = 'none';
-        document.getElementById('registerPanel').style.display = 'block';
-    });
-    
-    document.getElementById('showLogin')?.addEventListener('click', () => {
-        document.getElementById('registerPanel').style.display = 'none';
-        document.getElementById('loginPanel').style.display = 'block';
-    });
-    
-    document.getElementById('doLogin').addEventListener('click', () => {
-        const username = document.getElementById('loginUsername').value.trim();
-        const password = document.getElementById('loginPassword').value.trim();
-        const msg = document.getElementById('loginMessage');
-        
-        const user = users.find(u => u.username === username && u.password === password);
-        
-        if (user) {
-            currentUser = { username: user.username, role: user.role };
-            localStorage.setItem('tokozizuel_currentUser', JSON.stringify(currentUser));
-            
-            msg.className = 'login-message success';
-            msg.textContent = 'Berhasil masuk!';
-            msg.style.display = 'block';
-            
-            setTimeout(() => {
-                renderMainPage();
-            }, 500);
-        } else {
-            msg.className = 'login-message error';
-            msg.textContent = 'Username/password salah';
-            msg.style.display = 'block';
-        }
-    });
-    
-    document.getElementById('doRegister').addEventListener('click', () => {
-        const username = document.getElementById('regUsername').value.trim();
-        const email = document.getElementById('regEmail').value.trim();
-        const password = document.getElementById('regPassword').value.trim();
-        const msg = document.getElementById('registerMessage');
-        
-        if (!username || !email || !password) {
-            msg.className = 'login-message error';
-            msg.textContent = 'Semua field harus diisi';
-            msg.style.display = 'block';
-            return;
-        }
-        
-        if (users.some(u => u.username === username)) {
-            msg.className = 'login-message error';
-            msg.textContent = 'Username sudah digunakan';
-            msg.style.display = 'block';
-            return;
-        }
-        
-        if (!email.includes('@') || !email.includes('.')) {
-            msg.className = 'login-message error';
-            msg.textContent = 'Email tidak valid';
-            msg.style.display = 'block';
-            return;
-        }
-        
-        users.push({
-            username,
-            password,
-            email,
-            role: 'user'
-        });
-        
-        saveUsers();
-        
-        msg.className = 'login-message success';
-        msg.textContent = 'Registrasi berhasil! Silakan login.';
-        msg.style.display = 'block';
-        
-        document.getElementById('regUsername').value = '';
-        document.getElementById('regEmail').value = '';
-        document.getElementById('regPassword').value = '';
-        
-        setTimeout(() => {
-            document.getElementById('registerPanel').style.display = 'none';
-            document.getElementById('loginPanel').style.display = 'block';
-        }, 1500);
-    });
 }
 
 // ================== ADMIN SIDEBAR ==================
@@ -493,37 +528,7 @@ window.deleteProductHandler = async (id) => {
     }
 };
 
-// ================== LOGOUT ==================
-function logout() {
-    currentUser = null;
-    localStorage.removeItem('tokozizuel_currentUser');
-    bgMusic.pause();
-    bgMusic.src = '';
-    closeAdminSidebar();
-    
-    // Sembunyikan footer
-    document.getElementById('mainFooter').style.display = 'none';
-    
-    renderLoginPage();
-}
-
-// ================== CHECK SESSION ==================
-function checkSession() {
-    const saved = localStorage.getItem('tokozizuel_currentUser');
-    if (saved) {
-        try {
-            currentUser = JSON.parse(saved);
-            renderMainPage();
-        } catch (e) {
-            localStorage.removeItem('tokozizuel_currentUser');
-            renderLoginPage();
-        }
-    } else {
-        renderLoginPage();
-    }
-}
-
-// ================== INIT ADMIN SIDEBAR EVENTS ==================
+// ================== ADMIN SIDEBAR EVENTS ==================
 function initAdminEvents() {
     document.getElementById('closeSidebar').addEventListener('click', closeAdminSidebar);
     
@@ -634,10 +639,51 @@ function initAdminEvents() {
     });
 }
 
-// ================== START APP ==================
-checkSession();
+// ================== LOGOUT ==================
+async function logout() {
+    await supabaseClient.auth.signOut();
+    currentUser = null;
+    localStorage.removeItem('tokozizuel_currentUser');
+    bgMusic.pause();
+    bgMusic.src = '';
+    closeAdminSidebar();
+    
+    // Sembunyikan footer
+    document.getElementById('mainFooter').style.display = 'none';
+    
+    renderLoginPage();
+}
 
-// Initialize admin events after DOM is loaded
+// ================== CHECK SESSION ==================
+async function checkSession() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    
+    if (session?.user) {
+        const user = session.user;
+        const username = user.user_metadata?.username || user.email?.split('@')[0] || 'user';
+        const role = user.email === ADMIN_EMAIL ? 'admin' : 'user';
+        
+        currentUser = {
+            username: username,
+            email: user.email,
+            role: role,
+            id: user.id
+        };
+        
+        localStorage.setItem('tokozizuel_currentUser', JSON.stringify({
+            username: username,
+            role: role,
+            email: user.email
+        }));
+        
+        renderMainPage();
+    } else {
+        renderLoginPage();
+    }
+}
+
+// ================== INIT ==================
 document.addEventListener('DOMContentLoaded', () => {
+    checkSession();
     initAdminEvents();
 });
