@@ -9,7 +9,7 @@ const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ================== KONSTANTA ==================
 const WA_NUMBER = '62895630307497';
 const ADMIN_USERNAME = 'ownerzizuel';
-const ADMIN_PASSWORD = 'toko';
+const ADMIN_PASSWORD = 'tokokelontongzizuel';
 
 // ================== STATE ==================
 let currentUser = null;
@@ -23,7 +23,6 @@ let settings = {
 // ================== DOM ELEMENTS ==================
 const loadingOverlay = document.getElementById('loadingOverlay');
 const adminSidebar = document.getElementById('adminSidebar');
-const sidebarOverlay = document.getElementById('sidebarOverlay');
 const mainContainer = document.getElementById('mainContainer');
 const bgMusic = document.getElementById('bgMusic');
 
@@ -237,7 +236,7 @@ function renderLoginPage() {
     attachLoginEvents();
 }
 
-// ================== RENDER MAIN PAGE (SETELAH LOGIN) ==================
+// ================== RENDER MAIN PAGE ==================
 async function renderMainPage() {
     showLoading();
     
@@ -406,7 +405,6 @@ function attachLoginEvents() {
 // ================== ADMIN SIDEBAR ==================
 function openAdminSidebar() {
     adminSidebar.classList.add('active');
-    sidebarOverlay.classList.add('active');
     renderAdminProductList();
     
     // Isi form dengan data yang ada
@@ -417,7 +415,6 @@ function openAdminSidebar() {
 
 function closeAdminSidebar() {
     adminSidebar.classList.remove('active');
-    sidebarOverlay.classList.remove('active');
 }
 
 async function renderAdminProductList() {
@@ -470,6 +467,7 @@ window.editProductHandler = async (id) => {
         await renderMainPage();
         renderAdminProductList();
         alert('Produk berhasil diupdate');
+        closeAdminSidebar();
     } catch (error) {
         alert('Gagal update: ' + error.message);
     } finally {
@@ -487,6 +485,7 @@ window.deleteProductHandler = async (id) => {
         await renderMainPage();
         renderAdminProductList();
         alert('Produk berhasil dihapus');
+        closeAdminSidebar();
     } catch (error) {
         alert('Gagal hapus: ' + error.message);
     } finally {
@@ -527,7 +526,6 @@ function checkSession() {
 // ================== INIT ADMIN SIDEBAR EVENTS ==================
 function initAdminEvents() {
     document.getElementById('closeSidebar').addEventListener('click', closeAdminSidebar);
-    sidebarOverlay.addEventListener('click', closeAdminSidebar);
     
     // Save description
     document.getElementById('saveDescriptionBtn').addEventListener('click', async () => {
@@ -538,6 +536,7 @@ function initAdminEvents() {
             await renderMainPage();
             hideLoading();
             alert('Deskripsi berhasil disimpan');
+            closeAdminSidebar();
         }
     });
     
@@ -553,6 +552,7 @@ function initAdminEvents() {
                 await renderMainPage();
                 hideLoading();
                 alert('Logo berhasil disimpan');
+                closeAdminSidebar();
             };
             reader.readAsDataURL(file);
         }
@@ -570,6 +570,7 @@ function initAdminEvents() {
                 await renderMainPage();
                 hideLoading();
                 alert('Musik berhasil disimpan');
+                closeAdminSidebar();
             };
             reader.readAsDataURL(file);
         } else {
@@ -609,6 +610,7 @@ function initAdminEvents() {
                 document.getElementById('productImageName').textContent = 'Tidak ada';
                 
                 alert('Produk berhasil ditambahkan');
+                closeAdminSidebar();
             } catch (error) {
                 alert('Gagal: ' + error.message);
             } finally {
@@ -639,4 +641,3 @@ checkSession();
 document.addEventListener('DOMContentLoaded', () => {
     initAdminEvents();
 });
- 
