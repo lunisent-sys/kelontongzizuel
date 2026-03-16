@@ -1,31 +1,34 @@
-// ================== DATABASE SIM (login.json memory) ==================
+// ================== DATABASE ==================
 let db = {
     users: [],
     products: [],
-    storeLogo: "https://via.placeholder.com/42x42/0a1428/9bbaff?text=Z"
+    storeLogo: "",
+    storeHeader: "Semua produk terbaru dari tokokelontongzizuel",
+    musicUrl: null,
+    musicName: null
 };
 
-// inisialisasi admin default (ownerzizuel)
+// admin default
 const ADMIN_USERNAME = "ownerzizuel";
 const ADMIN_PASSWORD = "tokokelontongzizuel";
+const WA_NUMBER = "62895630307497";
 
-// load dari localStorage (sebagai "login.json" memori)
+// load database
 function loadDB() {
     const stored = localStorage.getItem("tokozizuel_db");
     if (stored) {
         try {
             db = JSON.parse(stored);
-        } catch (e) { 
-            console.warn("db corrupt, menggunakan default"); 
+        } catch (e) {
+            console.log("init db");
         }
     }
     
-    // pastikan struktur benar
     if (!db.users) db.users = [];
     if (!db.products) db.products = [];
-    if (!db.storeLogo) db.storeLogo = "https://via.placeholder.com/42x42/0a1428/9bbaff?text=Z";
-
-    // pastikan admin selalu ada
+    if (!db.storeLogo) db.storeLogo = "";
+    if (!db.storeHeader) db.storeHeader = "Semua produk terbaru dari tokokelontongzizuel";
+    
     const adminExists = db.users.some(u => u.username === ADMIN_USERNAME);
     if (!adminExists) {
         db.users.push({
@@ -36,499 +39,479 @@ function loadDB() {
         });
     }
     
-    // pastikan setiap user punya role
-    db.users = db.users.map(u => ({ 
-        ...u, 
-        role: u.username === ADMIN_USERNAME ? 'admin' : (u.role || 'user') 
-    }));
-    
     saveDB();
 }
 
 function saveDB() {
     localStorage.setItem("tokozizuel_db", JSON.stringify(db));
-    // update logo jika ada
-    const logoImg = document.getElementById('storeLogoImg');
-    if (logoImg) logoImg.src = db.storeLogo || "https://via.placeholder.com/42x42/0a1428/9bbaff?text=Z";
+    updateLogoDisplay();
 }
 
-// inisialisasi database
 loadDB();
 
-// state login
+// ================== STATE ==================
 let currentUser = null;
+let currentMusic = null;
 
-// elemen DOM
+// ================== DOM ELEMENTS ==================
 const navHome = document.getElementById('navHome');
-const navAdmin = document.getElementById('navAdminPanel');
 const navLogin = document.getElementById('navLogin');
 const navLogout = document.getElementById('navLogout');
 const mainEl = document.getElementById('mainContent');
-const discordLink = document.getElementById('discordLink');
 
-// ================== HELPER FUNCTIONS ==================
-function escapeHtml(unsafe) {
-    if (!unsafe) return unsafe;
-    return unsafe.replace(/[&<>"]/g, function(m) {
-        if (m === '&') return '&amp;';
-        if (m === '<') return '&lt;';
-        if (m === '>') return '&gt;';
-        if (m === '"') return '&quot;';
-        return m;
-    });
+// ================== HELPER ==================
+function escapeHtml(text) {
+    if (!text) return text;
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
-function formatRupiah(angka) {
-    return new Intl.NumberFormat('id-ID').format(angka);
+function formatRupiah(num) {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
-// ================== RENDER NAVIGATION ==================
-function updateNavigation() {
-    if (!currentUser) {
-        navLogin.classList.remove('hidden');
-        navLogout.classList.add('hidden');
-        navAdmin.classList.add('hidden');
-    } else {
-        navLogin.classList.add('hidden');
-        navLogout.classList.remove('hidden');
-        if (currentUser.role === 'admin') {
-            navAdmin.classList.remove('hidden');
-        } else {
-            navAdmin.classList.add('hidden');
-        }
+function updateLogoDisplay() {
+    const logoImg = document.getElementById('storeLogo');
+    if (logoImg && db.storeLogo) {
+        logoImg.src = db.storeLogo;
     }
-    
-    // hapus active class
-    [navHome, navAdmin, navLogin].forEach(b => b.classList.remove('active'));
 }
 
-// ================== PRODUCT FUNCTIONS ==================
-window.deleteProduct = (id) => {
-    if (currentUser?.role !== 'admin') {
-        alert('Hanya admin yang dapat menghapus produk');
-        return;
-    }
+// ================== MUSIC PLAYER ==================
+function initMusicPlayer() {
+    const existingPlayer = document.getElementById('globalMusicPlayer');
+    if (existingPlayer) existingPlayer.remove();
     
-    if (confirm('Yakin ingin menghapus produk ini?')) {
-        db.products = db.products.filter(p => p.id != id);
-        saveDB();
-        showHome();
-    }
-};
-
-window.editProduct = (id) => {
-    if (currentUser?.role !== 'admin') {
-        alert('Hanya admin yang dapat mengedit produk');
-        return;
-    }
+    if (!db.musicUrl) return;
     
-    const prod = db.products.find(p => p.id == id);
-    if (!prod) return;
+    const playerDiv = document.createElement('div');
+    playerDiv.id = 'globalMusicPlayer';
+    playerDiv.className = 'music-player';
+    playerDiv.innerHTML = `
+        <i class="fas fa-music" style="color:#7f9fff"></i>
+        <audio controls autoplay loop>
+            <source src="${db.musicUrl}" type="audio/mpeg">
+        </audio>
+        <span class="text-muted">${escapeHtml(db.musicName || 'musik latar')}</span>
+    `;
     
-    // buka panel admin dan isi form
-    showAdmin();
-    
-    // isi form dengan data produk
-    setTimeout(() => {
-        document.getElementById('prodNama').value = prod.nama || '';
-        document.getElementById('prodHarga').value = prod.harga || '';
-        document.getElementById('prodDesc').value = prod.deskripsi || '';
-        
-        // ubah tombol simpan untuk update
-        const btn = document.getElementById('saveProductBtn');
-        btn.innerHTML = '<i class="fas fa-pen"></i> Update Produk';
-        btn.dataset.editId = id;
-        
-        // hapus event listener lama dan tambah baru
-        btn.replaceWith(btn.cloneNode(true));
-        const newBtn = document.getElementById('saveProductBtn');
-        newBtn.addEventListener('click', function() {
-            updateProduct(id);
-        });
-    }, 100);
-};
-
-function updateProduct(id) {
-    const prod = db.products.find(p => p.id == id);
-    if (!prod) return;
-    
-    const nama = document.getElementById('prodNama').value.trim();
-    const harga = document.getElementById('prodHarga').value.trim();
-    const desc = document.getElementById('prodDesc').value.trim();
-    
-    if (!nama || !harga) {
-        alert('Nama dan harga wajib diisi');
-        return;
-    }
-    
-    prod.nama = nama;
-    prod.harga = parseInt(harga) || 0;
-    prod.deskripsi = desc;
-    
-    // handle image jika ada file baru
-    const imgFile = document.getElementById('prodImageInput').files[0];
-    if (imgFile && imgFile.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            prod.image = e.target.result;
-            saveDB();
-            alert('Produk berhasil diupdate!');
-            showAdmin();
-        };
-        reader.readAsDataURL(imgFile);
-    } else {
-        saveDB();
-        alert('Produk berhasil diupdate!');
-        showAdmin();
-    }
+    const footer = document.querySelector('.footer');
+    footer.parentNode.insertBefore(playerDiv, footer);
 }
 
 // ================== PAGES ==================
 function showHome() {
-    let html = `<div class="glass-panel">
-        <h2 style="font-size:2.5rem; margin-bottom:0.5rem; font-weight:500;">
-            <i class="fas fa-tag"></i> Semua Produk
-        </h2>
-        <p style="color:#aab9e0;">Koleksi kelontong modern Zizuel — klik WhatsApp untuk order</p>`;
-
+    if (!currentUser) {
+        showAuth();
+        return;
+    }
+    
+    let html = `
+        <div class="card">
+            <div style="margin-bottom: 2rem;">
+                <h1 style="font-size: 1.8rem; font-weight: 500; margin-bottom: 0.5rem;">${escapeHtml(db.storeHeader)}</h1>
+                <p class="text-muted">selamat berbelanja, ${escapeHtml(currentUser.username)}</p>
+            </div>
+    `;
+    
     if (db.products.length === 0) {
-        html += `<div style="padding: 3rem; text-align:center; color:#99a9dd">
-            <i class="fas fa-box-open" style="font-size:3rem; opacity:0.5;"></i>
-            <p>✨ belum ada produk, admin segera tambah</p>
-        </div>`;
+        html += `<p class="text-muted" style="text-align: center; padding: 3rem;">belum ada produk</p>`;
     } else {
-        html += `<div class="product-grid">`;
-        db.products.forEach((prod) => {
-            const prodId = prod.id || `prod_${Date.now()}_${Math.random()}`;
-            if (!prod.id) prod.id = prodId;
-            
-            html += `<div class="product-card" data-id="${prod.id}">
-                <img class="product-img" src="${prod.image || 'https://via.placeholder.com/260x170/1a2540/7d9eff?text=Z+Produk'}" 
-                     alt="produk" onerror="this.src='https://via.placeholder.com/260x170/1a2540/7d9eff?text=Z+Produk'">
-                <div class="product-title">${escapeHtml(prod.nama) || 'Tanpa Nama'}</div>
-                <div class="product-desc">${escapeHtml(prod.deskripsi) || '—'}</div>
-                <div class="product-price">Rp ${formatRupiah(prod.harga || 0)}</div>`;
-
-            // whatsapp button per produk
-            const waText = `Saya%20tertarik%20dengan%20produk%20${encodeURIComponent(prod.nama)}%20harga%20Rp%20${prod.harga}`;
-            html += `<a class="wa-button" href="https://wa.me/?text=${waText}" target="_blank">
-                <i class="fab fa-whatsapp"></i> Beli via WA
-            </a>`;
-
-            // jika admin tampilkan tombol edit/delete
-            if (currentUser && currentUser.role === 'admin') {
-                html += `<div class="admin-actions">
-                    <button class="small-btn" onclick="editProduct('${prod.id}')">
-                        <i class="fas fa-pen"></i> edit
-                    </button>
-                    <button class="small-btn" onclick="deleteProduct('${prod.id}')">
-                        <i class="fas fa-trash"></i> hapus
-                    </button>
-                </div>`;
-            }
-            
-            // jika ada mp3, tampilkan player sederhana
-            if (prod.mp3) {
-                html += `<div class="audio-preview">
-                    <small><i class="fas fa-music"></i> ${escapeHtml(prod.mp3)}</small>
-                </div>`;
-            }
-            
-            html += `</div>`;
+        html += `<div class="products-grid">`;
+        db.products.forEach(prod => {
+            const waText = `Permisi, saya ingin membeli ${encodeURIComponent(prod.nama)} senilai Rp ${prod.harga}`;
+            html += `
+                <div class="product-item">
+                    <img class="product-image" src="${prod.image || 'https://via.placeholder.com/240x150/1a2335/7f9fff?text=zizuel'}" 
+                         onerror="this.src='https://via.placeholder.com/240x150/1a2335/7f9fff?text=zizuel'">
+                    <div class="product-name">${escapeHtml(prod.nama)}</div>
+                    <div class="product-desc">${escapeHtml(prod.deskripsi) || '—'}</div>
+                    <div class="product-price">Rp ${formatRupiah(prod.harga)}</div>
+                    <a class="wa-order" href="https://wa.me/${WA_NUMBER}?text=${waText}" target="_blank">
+                        <i class="fab fa-whatsapp"></i> beli via whatsapp
+                    </a>
+                </div>
+            `;
         });
         html += `</div>`;
     }
-    html += `</div>`;
     
+    html += `</div>`;
     mainEl.innerHTML = html;
-    updateNavigation();
+    
+    if (currentUser.role === 'admin') {
+        addAdminButton();
+    }
+}
+
+function addAdminButton() {
+    const adminBtn = document.createElement('button');
+    adminBtn.className = 'btn';
+    adminBtn.style.marginTop = '2rem';
+    adminBtn.innerHTML = '<i class="fas fa-cog"></i> panel admin';
+    adminBtn.onclick = showAdmin;
+    mainEl.querySelector('.card').appendChild(adminBtn);
 }
 
 function showAdmin() {
     if (!currentUser || currentUser.role !== 'admin') {
-        alert('Akses ditolak. Halaman ini hanya untuk administrator.');
         showHome();
         return;
     }
     
-    let html = `<div class="glass-panel">
-        <h2><i class="fas fa-crown"></i> Panel Administrator</h2>
-        
-        <div style="background:#0f1b30; border-radius:40px; padding:2rem; margin:2rem 0;">
-            <h3>➕ Tambah / Edit Produk</h3>
-            <div class="admin-form">
-                <input type="text" id="prodNama" class="input-glass" placeholder="Nama produk" value="">
-                <input type="number" id="prodHarga" class="input-glass" placeholder="Harga (angka)" value="">
-                <input type="text" id="prodDesc" class="input-glass" placeholder="Deskripsi singkat" value="">
-                
-                <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                    <label class="file-label">
-                        <i class="fas fa-image"></i> Upload Gambar
-                        <input type="file" id="prodImageInput" accept="image/*" style="display:none;">
-                    </label>
-                    <span id="imageName">tidak ada file</span>
+    let html = `
+        <div class="card">
+            <h2 class="section-title">⚙️ panel admin</h2>
+            
+            <!-- Edit Header -->
+            <div class="admin-section">
+                <h3 class="section-title">teks halaman</h3>
+                <div class="form-group">
+                    <input type="text" id="headerText" class="input-field" value="${escapeHtml(db.storeHeader)}" placeholder="teks di atas produk">
                 </div>
-                
-                <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                    <label class="file-label">
-                        <i class="fas fa-music"></i> Upload MP3
-                        <input type="file" id="prodMp3Input" accept="audio/mpeg" style="display:none;">
-                    </label>
-                    <span id="mp3Name">tidak ada file</span>
-                </div>
+                <button class="btn" id="saveHeaderBtn">simpan teks</button>
             </div>
             
-            <button class="btn-glass" id="saveProductBtn">
-                <i class="fas fa-save"></i> Simpan produk baru
-            </button>
-            
-            <hr style="border-color:#2f4580; margin:2rem 0;">
-            
-            <h3>🖼️ Ubah Logo Store (URL)</h3>
-            <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-                <input type="text" id="logoUrlInput" class="input-glass" style="flex:3;" 
-                       placeholder="https://... gambar logo" value="${db.storeLogo || ''}">
-                <button class="btn-glass" id="updateLogoBtn">
-                    <i class="fas fa-sync"></i> Ganti
-                </button>
+            <!-- Logo Upload -->
+            <div class="admin-section">
+                <h3 class="section-title">logo toko</h3>
+                <div class="form-group">
+                    <label class="file-upload">
+                        <i class="fas fa-upload"></i> pilih gambar logo
+                        <input type="file" id="logoUpload" accept="image/*">
+                    </label>
+                    <span class="file-name" id="logoFileName">${db.storeLogo ? 'logo tersedia' : 'belum ada logo'}</span>
+                </div>
+                <button class="btn" id="saveLogoBtn">simpan logo</button>
             </div>
             
-            <hr style="border-color:#2f4580; margin:2rem 0;">
+            <!-- Music Upload -->
+            <div class="admin-section">
+                <h3 class="section-title">musik latar (auto play)</h3>
+                <div class="form-group">
+                    <label class="file-upload">
+                        <i class="fas fa-music"></i> pilih file MP3
+                        <input type="file" id="musicUpload" accept="audio/mpeg">
+                    </label>
+                    <span class="file-name" id="musicFileName">${db.musicName || 'belum ada musik'}</span>
+                </div>
+                ${db.musicUrl ? `
+                    <audio controls style="width:100%; margin-top:1rem;">
+                        <source src="${db.musicUrl}" type="audio/mpeg">
+                    </audio>
+                ` : ''}
+                <button class="btn" id="saveMusicBtn" style="margin-top:1rem;">simpan musik</button>
+            </div>
             
-            <h3>📦 Daftar produk (kelola)</h3>
-        </div>`;
-
-    // list produk untuk admin
+            <!-- Add Product -->
+            <div class="admin-section">
+                <h3 class="section-title">tambah produk</h3>
+                <div class="form-group">
+                    <input type="text" id="prodName" class="input-field" placeholder="nama produk">
+                </div>
+                <div class="form-row">
+                    <input type="number" id="prodPrice" class="input-field" placeholder="harga">
+                    <input type="text" id="prodDesc" class="input-field" placeholder="deskripsi singkat">
+                </div>
+                <div class="form-group">
+                    <label class="file-upload">
+                        <i class="fas fa-image"></i> gambar produk
+                        <input type="file" id="prodImage" accept="image/*">
+                    </label>
+                    <span class="file-name" id="prodImageName">tidak ada</span>
+                </div>
+                <button class="btn" id="addProductBtn">tambah produk</button>
+            </div>
+            
+            <!-- Product List -->
+            <div class="admin-section">
+                <h3 class="section-title">daftar produk</h3>
+                <div class="product-list-admin">
+    `;
+    
     if (db.products.length === 0) {
-        html += `<p style="color:#99a9dd; text-align:center;">Belum ada produk</p>`;
+        html += `<p class="text-muted">belum ada produk</p>`;
     } else {
-        db.products.forEach(p => {
-            if (!p.id) p.id = `prod_${Date.now()}_${Math.random()}`;
-            html += `<div style="background:#0f1d32; margin:1rem 0; padding:1rem 2rem; 
-                     border-radius:60px; display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
-                <span><strong>${escapeHtml(p.nama)}</strong> Rp ${formatRupiah(p.harga)}</span>
-                <button class="small-btn" onclick="editProduct('${p.id}')">
-                    <i class="fas fa-pen"></i> edit
-                </button>
-                <button class="small-btn" onclick="deleteProduct('${p.id}')">
-                    <i class="fas fa-trash"></i> hapus
-                </button>
-            </div>`;
+        db.products.forEach(prod => {
+            html += `
+                <div class="admin-product-row">
+                    <div class="admin-product-info">
+                        <span style="font-weight:500;">${escapeHtml(prod.nama)}</span>
+                        <span class="text-muted">Rp ${formatRupiah(prod.harga)}</span>
+                    </div>
+                    <div class="admin-product-actions">
+                        <button class="btn-small" onclick="editProduct('${prod.id}')">edit</button>
+                        <button class="btn-small" onclick="deleteProduct('${prod.id}')">hapus</button>
+                    </div>
+                </div>
+            `;
         });
     }
-
-    html += `</div>`;
+    
+    html += `
+                </div>
+            </div>
+        </div>
+    `;
+    
     mainEl.innerHTML = html;
-    updateNavigation();
+    attachAdminEvents();
+}
 
-    // event listener untuk form admin
-    document.getElementById('updateLogoBtn')?.addEventListener('click', function() {
-        const newUrl = document.getElementById('logoUrlInput').value.trim();
-        if (newUrl) {
-            db.storeLogo = newUrl;
+function attachAdminEvents() {
+    // Save header
+    document.getElementById('saveHeaderBtn')?.addEventListener('click', () => {
+        const newHeader = document.getElementById('headerText').value.trim();
+        if (newHeader) {
+            db.storeHeader = newHeader;
             saveDB();
-            document.getElementById('storeLogoImg').src = newUrl;
-            alert('Logo berhasil diperbarui!');
+            alert('teks berhasil disimpan');
         }
     });
-
-    // preview file names
-    document.getElementById('prodImageInput')?.addEventListener('change', function(e) {
-        const fileName = e.target.files[0]?.name || 'tidak ada file';
-        document.getElementById('imageName').textContent = fileName;
-    });
-
-    document.getElementById('prodMp3Input')?.addEventListener('change', function(e) {
-        const fileName = e.target.files[0]?.name || 'tidak ada file';
-        document.getElementById('mp3Name').textContent = fileName;
-    });
-
-    // save product button
-    document.getElementById('saveProductBtn')?.addEventListener('click', function() {
-        saveNewProduct();
-    });
-}
-
-function saveNewProduct() {
-    const nama = document.getElementById('prodNama').value.trim();
-    const harga = document.getElementById('prodHarga').value.trim();
-    const desc = document.getElementById('prodDesc').value.trim();
     
-    if (!nama || !harga) {
-        alert('Nama dan harga wajib diisi');
-        return;
-    }
-
-    const imgFile = document.getElementById('prodImageInput').files[0];
-    const mp3File = document.getElementById('prodMp3Input').files[0];
-
-    if (imgFile && imgFile.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            finalSaveProduct(nama, harga, desc, e.target.result, mp3File ? mp3File.name : null);
-        };
-        reader.readAsDataURL(imgFile);
-    } else {
-        finalSaveProduct(nama, harga, desc, null, mp3File ? mp3File.name : null);
-    }
+    // Logo upload
+    document.getElementById('logoUpload')?.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file && file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                db.storeLogo = event.target.result;
+                saveDB();
+                document.getElementById('logoFileName').textContent = file.name;
+                alert('logo berhasil disimpan');
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+    
+    // Music upload
+    document.getElementById('musicUpload')?.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file && file.type === 'audio/mpeg') {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                db.musicUrl = event.target.result;
+                db.musicName = file.name;
+                saveDB();
+                document.getElementById('musicFileName').textContent = file.name;
+                initMusicPlayer();
+                alert('musik berhasil disimpan (auto play untuk semua pengguna)');
+            };
+            reader.readAsDataURL(file);
+        } else {
+            alert('hanya file MP3 yang diperbolehkan');
+        }
+    });
+    
+    // Add product
+    document.getElementById('addProductBtn')?.addEventListener('click', () => {
+        const name = document.getElementById('prodName').value.trim();
+        const price = document.getElementById('prodPrice').value.trim();
+        const desc = document.getElementById('prodDesc').value.trim();
+        const imageFile = document.getElementById('prodImage').files[0];
+        
+        if (!name || !price) {
+            alert('nama dan harga harus diisi');
+            return;
+        }
+        
+        if (imageFile && imageFile.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                addProduct(name, price, desc, e.target.result);
+            };
+            reader.readAsDataURL(imageFile);
+        } else {
+            addProduct(name, price, desc, null);
+        }
+    });
 }
 
-function finalSaveProduct(nama, harga, deskripsi, imageBase64, mp3Name) {
+function addProduct(name, price, desc, imageData) {
     const newProd = {
-        id: 'prod_' + Date.now() + Math.random().toString(36).substr(2, 6),
-        nama: nama,
-        harga: parseInt(harga) || 0,
-        deskripsi: deskripsi || '',
-        image: imageBase64 || 'https://via.placeholder.com/260x170/1a2540/7d9eff?text=Z+Produk',
-        mp3: mp3Name
+        id: 'p' + Date.now() + Math.random().toString(36).substr(2, 4),
+        nama: name,
+        harga: parseInt(price) || 0,
+        deskripsi: desc || '',
+        image: imageData || 'https://via.placeholder.com/240x150/1a2335/7f9fff?text=zizuel'
     };
     
     db.products.push(newProd);
     saveDB();
-    alert('Produk berhasil ditambahkan!');
-    
-    // reset form
-    document.getElementById('prodNama').value = '';
-    document.getElementById('prodHarga').value = '';
-    document.getElementById('prodDesc').value = '';
-    document.getElementById('prodImageInput').value = '';
-    document.getElementById('prodMp3Input').value = '';
-    document.getElementById('imageName').textContent = 'tidak ada file';
-    document.getElementById('mp3Name').textContent = 'tidak ada file';
-    
+    alert('produk ditambahkan');
     showAdmin();
 }
 
+// Global functions for admin
+window.editProduct = (id) => {
+    const prod = db.products.find(p => p.id === id);
+    if (!prod) return;
+    
+    const newName = prompt('nama produk:', prod.nama);
+    if (newName === null) return;
+    
+    const newPrice = prompt('harga:', prod.harga);
+    if (newPrice === null) return;
+    
+    const newDesc = prompt('deskripsi:', prod.deskripsi || '');
+    
+    prod.nama = newName.trim() || prod.nama;
+    prod.harga = parseInt(newPrice) || prod.harga;
+    prod.deskripsi = newDesc || prod.deskripsi;
+    
+    saveDB();
+    alert('produk diperbarui');
+    showAdmin();
+};
+
+window.deleteProduct = (id) => {
+    if (confirm('hapus produk ini?')) {
+        db.products = db.products.filter(p => p.id !== id);
+        saveDB();
+        showAdmin();
+    }
+};
+
 function showAuth() {
-    const html = `<div class="auth-box glass-panel">
-        <div class="auth-toggle">
-            <button class="btn-glass" id="toggleLogin">Login</button>
-            <button class="btn-glass" id="toggleRegister">Register</button>
+    const html = `
+        <div class="auth-container">
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="tabLogin">masuk</button>
+                <button class="auth-tab" id="tabRegister">daftar</button>
+            </div>
+            
+            <div id="loginPanel">
+                <div class="form-group">
+                    <input type="text" id="loginUsername" class="input-field" placeholder="username">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="loginPassword" class="input-field" placeholder="password">
+                </div>
+                <button class="btn" id="doLogin" style="width:100%;">masuk</button>
+                <div id="loginMessage"></div>
+            </div>
+            
+            <div id="registerPanel" class="hidden">
+                <div class="form-group">
+                    <input type="text" id="regUsername" class="input-field" placeholder="username">
+                </div>
+                <div class="form-group">
+                    <input type="email" id="regEmail" class="input-field" placeholder="email">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="regPassword" class="input-field" placeholder="password">
+                </div>
+                <button class="btn" id="doRegister" style="width:100%;">daftar</button>
+                <div id="registerMessage"></div>
+            </div>
         </div>
-        
-        <div id="loginForm">
-            <h3>Login</h3>
-            <input type="text" id="loginUsername" class="input-glass" placeholder="Username"><br><br>
-            <input type="password" id="loginPassword" class="input-glass" placeholder="Password"><br><br>
-            <button class="btn-glass" id="doLogin"><i class="fas fa-sign-in-alt"></i> Masuk</button>
-            <div id="loginMessage"></div>
-        </div>
-        
-        <div id="registerForm" class="hidden">
-            <h3>Register</h3>
-            <input type="text" id="regUsername" class="input-glass" placeholder="Username"><br><br>
-            <input type="email" id="regEmail" class="input-glass" placeholder="Email"><br><br>
-            <input type="password" id="regPassword" class="input-glass" placeholder="Password"><br><br>
-            <button class="btn-glass" id="doRegister"><i class="fas fa-user-plus"></i> Daftar</button>
-            <div id="registerMessage"></div>
-        </div>
-    </div>`;
+    `;
     
     mainEl.innerHTML = html;
-    updateNavigation();
-
-    // toggle login/register
-    document.getElementById('toggleLogin').addEventListener('click', () => {
-        document.getElementById('loginForm').classList.remove('hidden');
-        document.getElementById('registerForm').classList.add('hidden');
+    
+    // Tab switching
+    document.getElementById('tabLogin').addEventListener('click', () => {
+        document.getElementById('tabLogin').classList.add('active');
+        document.getElementById('tabRegister').classList.remove('active');
+        document.getElementById('loginPanel').classList.remove('hidden');
+        document.getElementById('registerPanel').classList.add('hidden');
     });
-
-    document.getElementById('toggleRegister').addEventListener('click', () => {
-        document.getElementById('loginForm').classList.add('hidden');
-        document.getElementById('registerForm').classList.remove('hidden');
+    
+    document.getElementById('tabRegister').addEventListener('click', () => {
+        document.getElementById('tabRegister').classList.add('active');
+        document.getElementById('tabLogin').classList.remove('active');
+        document.getElementById('registerPanel').classList.remove('hidden');
+        document.getElementById('loginPanel').classList.add('hidden');
     });
-
-    // login
+    
+    // Login
     document.getElementById('doLogin').addEventListener('click', () => {
         const username = document.getElementById('loginUsername').value.trim();
         const password = document.getElementById('loginPassword').value.trim();
-        const msgBox = document.getElementById('loginMessage');
-
-        if (!username || !password) {
-            msgBox.innerHTML = '<div class="error-msg">Username dan password harus diisi</div>';
-            return;
-        }
-
+        const msg = document.getElementById('loginMessage');
+        
         const user = db.users.find(u => u.username === username && u.password === password);
         
         if (user) {
             currentUser = { username: user.username, role: user.role };
-            msgBox.innerHTML = '<div class="success-msg">Login berhasil! Redirecting...</div>';
-            setTimeout(() => showHome(), 1000);
+            msg.innerHTML = '<div class="message-box success">berhasil masuk</div>';
+            setTimeout(() => {
+                showHome();
+                updateNav();
+                initMusicPlayer();
+            }, 500);
         } else {
-            msgBox.innerHTML = '<div class="error-msg">Username atau password salah</div>';
+            msg.innerHTML = '<div class="message-box error">username/password salah</div>';
         }
     });
-
-    // register
+    
+    // Register
     document.getElementById('doRegister').addEventListener('click', () => {
         const username = document.getElementById('regUsername').value.trim();
         const email = document.getElementById('regEmail').value.trim();
         const password = document.getElementById('regPassword').value.trim();
-        const msgBox = document.getElementById('registerMessage');
-
+        const msg = document.getElementById('registerMessage');
+        
         if (!username || !email || !password) {
-            msgBox.innerHTML = '<div class="error-msg">Semua field harus diisi</div>';
+            msg.innerHTML = '<div class="message-box error">semua field harus diisi</div>';
             return;
         }
-
+        
         if (db.users.some(u => u.username === username)) {
-            msgBox.innerHTML = '<div class="error-msg">Username sudah digunakan</div>';
+            msg.innerHTML = '<div class="message-box error">username sudah ada</div>';
             return;
         }
-
+        
         if (!email.includes('@') || !email.includes('.')) {
-            msgBox.innerHTML = '<div class="error-msg">Email tidak valid</div>';
+            msg.innerHTML = '<div class="message-box error">email tidak valid</div>';
             return;
         }
-
-        const newUser = {
-            username: username,
-            password: password,
-            email: email,
+        
+        db.users.push({
+            username,
+            password,
+            email,
             role: 'user'
-        };
-
-        db.users.push(newUser);
+        });
+        
         saveDB();
+        msg.innerHTML = '<div class="message-box success">berhasil daftar, silakan masuk</div>';
         
-        msgBox.innerHTML = '<div class="success-msg">Registrasi berhasil! Silakan login.</div>';
-        
-        // reset form
         document.getElementById('regUsername').value = '';
         document.getElementById('regEmail').value = '';
         document.getElementById('regPassword').value = '';
         
-        // switch ke login
         setTimeout(() => {
-            document.getElementById('loginForm').classList.remove('hidden');
-            document.getElementById('registerForm').classList.add('hidden');
+            document.getElementById('tabLogin').click();
         }, 1500);
     });
 }
 
 function logout() {
     currentUser = null;
-    showHome();
+    const player = document.getElementById('globalMusicPlayer');
+    if (player) player.remove();
+    showAuth();
+    updateNav();
+}
+
+function updateNav() {
+    if (currentUser) {
+        navLogin.classList.add('hidden');
+        navLogout.classList.remove('hidden');
+    } else {
+        navLogin.classList.remove('hidden');
+        navLogout.classList.add('hidden');
+    }
 }
 
 // ================== EVENT LISTENERS ==================
 navHome.addEventListener('click', showHome);
-navAdmin.addEventListener('click', showAdmin);
 navLogin.addEventListener('click', showAuth);
 navLogout.addEventListener('click', logout);
 
-// discord link
-discordLink.addEventListener('click', (e) => {
-    e.preventDefault();
-    window.open('https://discord.gg/VvkJPDstaw', '_blank');
-});
-
-// ================== INITIAL RENDER ==================
-showHome();
-
-// auto-save database setiap ada perubahan (via tombol sudah handle)
-window.addEventListener('load', () => {
-    // update logo
-    document.getElementById('storeLogoImg').src = db.storeLogo;
-});
+// ================== INIT ==================
+showAuth();
+updateNav();
+updateLogoDisplay();
