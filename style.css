@@ -21,6 +21,7 @@ body {
     height: 100%;
     background: rgba(59, 130, 246, 0.8);
     backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     z-index: 9999;
     display: flex;
     justify-content: center;
@@ -101,7 +102,7 @@ body {
     letter-spacing: 1px;
 }
 
-/* Tombol Logout - KECIL */
+/* Tombol Logout */
 .btn-logout {
     background: #3b82f6;
     color: #ffffff;
@@ -119,7 +120,7 @@ body {
     background: #2563eb;
 }
 
-/* Store Description - BRIGHT BLUE */
+/* Store Description */
 .store-description {
     background: #3b82f6;
     border-radius: 20px;
@@ -143,7 +144,7 @@ body {
     gap: 20px;
 }
 
-/* Product Card - BRIGHT BLUE */
+/* Product Card */
 .product-card {
     background: #3b82f6;
     border-radius: 20px;
@@ -177,34 +178,84 @@ body {
     cursor: pointer;
 }
 
-/* ===== PERUBAHAN UTAMA: DESKRIPSI ===== */
+/* ===== EFEK BLUR KACA UNTUK DESKRIPSI ===== */
 .product-desc {
     font-size: 0.9rem;
     color: #e0f2fe;
-    margin-bottom: 10px;
     line-height: 1.6;
-    white-space: pre-line;  /* MEMBUAT \n JADI ENTER */
-    max-height: 60px;       /* BATAS TINGGI 3 BARIS */
-    overflow: hidden;
-    transition: max-height 0.3s ease;
+    white-space: pre-line; /* Membuat enter jadi baris baru */
+    position: relative;
     cursor: pointer;
-    background: rgba(0, 0, 0, 0.1);
-    padding: 5px 8px;
-    border-radius: 8px;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Animasi bounce */
+    max-height: 60px; /* Batas 3 baris */
+    overflow: hidden;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.25) 0%, 
+        rgba(255, 255, 255, 0.15) 50%,
+        rgba(255, 255, 255, 0.05) 100%);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
+/* Efek blur gradient di bagian bawah */
+.product-desc::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    background: linear-gradient(to bottom, 
+        transparent 0%, 
+        rgba(59, 130, 246, 0.9) 90%);
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    border-radius: 0 0 12px 12px;
+}
+
+/* Efek hover */
+.product-desc:hover {
+    background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.3) 0%, 
+        rgba(255, 255, 255, 0.2) 50%,
+        rgba(255, 255, 255, 0.1) 100%);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+/* Saat di-expand (di klik) */
 .product-desc.expanded {
-    max-height: 500px;      /* KALAU DI KLIK, FULL */
-    overflow-y: auto;
-    background: rgba(255, 255, 255, 0.15);
+    max-height: 800px; /* Muat banyak teks */
+    background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.35) 0%, 
+        rgba(255, 255, 255, 0.25) 50%,
+        rgba(255, 255, 255, 0.15) 100%);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    transform: scale(1.02) translateY(-3px);
+    padding: 12px 16px;
 }
 
-/* ===== PERUBAHAN UTAMA: HARGA ===== */
+/* Hilangkan efek blur bawah saat expand */
+.product-desc.expanded::after {
+    opacity: 0;
+}
+
+/* Product Price */
 .product-price {
     font-size: 1.4rem;
     font-weight: 700;
     color: #ffffff;
-    margin-bottom: 15px;
+    margin: 15px 0;
     text-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
@@ -231,7 +282,7 @@ body {
     color: #25D366;
 }
 
-/* Login Modal - BRIGHT BLUE */
+/* Login Modal */
 .login-modal {
     position: fixed;
     top: 0;
@@ -240,6 +291,7 @@ body {
     height: 100%;
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
     z-index: 2000;
     display: flex;
     justify-content: center;
@@ -286,10 +338,6 @@ body {
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
 }
 
-.login-input::placeholder {
-    color: #94a3b8;
-}
-
 .login-btn {
     width: 100%;
     background: #2563eb;
@@ -331,7 +379,7 @@ body {
     display: none;
 }
 
-/* Admin Sidebar - BRIGHT BLUE */
+/* Admin Sidebar */
 .admin-sidebar {
     position: fixed;
     top: 0;
@@ -481,7 +529,7 @@ body {
     margin-left: 5px;
 }
 
-/* Footer Discord - DI TENGAH */
+/* Footer Discord */
 .footer {
     width: 100%;
     padding: 25px 20px;
@@ -494,7 +542,7 @@ body {
     max-width: 1200px;
     margin: 0 auto;
     display: flex;
-    justify-content: center; /* TENGAH */
+    justify-content: center;
 }
 
 .discord-link {
@@ -547,9 +595,5 @@ body {
     
     .products-grid {
         grid-template-columns: 1fr;
-    }
-    
-    .footer-container {
-        justify-content: center;
     }
 }

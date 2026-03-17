@@ -41,11 +41,10 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-/* ===== PERUBAHAN UTAMA: FORMAT HARGA RANGE ===== */
+/* ===== FORMAT HARGA RANGE ===== */
 function formatHarga(harga) {
     if (!harga && harga !== 0) return 'Rp 0';
     
-    // Jika harga mengandung tanda "-" (range)
     if (harga.toString().includes('-')) {
         const parts = harga.toString().split('-');
         const harga1 = parseInt(parts[0]) || 0;
@@ -56,14 +55,31 @@ function formatHarga(harga) {
         }
     }
     
-    // Harga tunggal
     const angka = parseInt(harga) || 0;
     return `Rp ${angka.toLocaleString('id-ID')}`;
 }
 
-/* ===== FUNGSI BARU: TOGGLE DESKRIPSI ===== */
+/* ===== FUNGSI TOGGLE DESKRIPSI DENGAN BOUNCE ===== */
 window.toggleDesc = function(element) {
-    element.classList.toggle('expanded');
+    // Efek bounce: mengecil dulu
+    element.style.transform = 'scale(0.98)';
+    element.style.transition = 'transform 0.1s ease';
+    
+    setTimeout(() => {
+        element.classList.toggle('expanded');
+        
+        // Animasi bounce
+        if (element.classList.contains('expanded')) {
+            element.style.transform = 'scale(1.05)';
+            setTimeout(() => {
+                element.style.transform = 'scale(1)';
+                element.style.transition = 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+            }, 150);
+        } else {
+            element.style.transform = 'scale(1)';
+            element.style.transition = 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        }
+    }, 100);
 };
 
 // ================== LOAD DATA FROM SUPABASE ==================
@@ -158,7 +174,7 @@ async function saveProduct(product) {
             .from('products')
             .insert([{
                 nama: product.nama,
-                harga: product.harga.toString(), // Simpan sebagai string biar bisa range
+                harga: product.harga.toString(),
                 deskripsi: product.deskripsi || '',
                 image: product.image || '',
                 user_id: currentUser?.email || 'admin'
@@ -401,7 +417,7 @@ async function renderMainPage() {
     
     mainContainer.innerHTML = header;
     
-    // ===== PERUBAHAN UTAMA: RENDER PRODUK DENGAN DESKRIPSI & HARGA BARU =====
+    // Render produk
     const productsGrid = document.getElementById('productsGrid');
     
     if (products.length === 0) {
