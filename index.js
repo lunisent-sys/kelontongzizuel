@@ -8,7 +8,6 @@ const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ================== KONSTANTA ==================
 const WA_NUMBER = '62895630307497';
-const ADMIN_USERNAME = 'ownerzizuel';
 const ADMIN_EMAIL = 'admin@zizuel.local';
 
 // ================== STATE ==================
@@ -42,9 +41,30 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-function formatRupiah(num) {
-    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+/* ===== PERUBAHAN UTAMA: FORMAT HARGA RANGE ===== */
+function formatHarga(harga) {
+    if (!harga && harga !== 0) return 'Rp 0';
+    
+    // Jika harga mengandung tanda "-" (range)
+    if (harga.toString().includes('-')) {
+        const parts = harga.toString().split('-');
+        const harga1 = parseInt(parts[0]) || 0;
+        const harga2 = parseInt(parts[1]) || 0;
+        
+        if (harga1 && harga2) {
+            return `Rp ${harga1.toLocaleString('id-ID')} - Rp ${harga2.toLocaleString('id-ID')}`;
+        }
+    }
+    
+    // Harga tunggal
+    const angka = parseInt(harga) || 0;
+    return `Rp ${angka.toLocaleString('id-ID')}`;
 }
+
+/* ===== FUNGSI BARU: TOGGLE DESKRIPSI ===== */
+window.toggleDesc = function(element) {
+    element.classList.toggle('expanded');
+};
 
 // ================== LOAD DATA FROM SUPABASE ==================
 async function loadProducts() {
@@ -91,7 +111,6 @@ async function loadSettings() {
 // ================== SAVE TO SUPABASE ==================
 async function saveSettings(updates) {
     try {
-        // Cek apakah settings sudah ada
         const { data: existing } = await supabaseClient
             .from('settings')
             .select('id')
@@ -100,7 +119,6 @@ async function saveSettings(updates) {
         
         let result;
         if (existing) {
-            // UPDATE
             result = await supabaseClient
                 .from('settings')
                 .update({
@@ -110,7 +128,6 @@ async function saveSettings(updates) {
                 })
                 .eq('id', 1);
         } else {
-            // INSERT
             result = await supabaseClient
                 .from('settings')
                 .insert([{
@@ -141,7 +158,7 @@ async function saveProduct(product) {
             .from('products')
             .insert([{
                 nama: product.nama,
-                harga: product.harga,
+                harga: product.harga.toString(), // Simpan sebagai string biar bisa range
                 deskripsi: product.deskripsi || '',
                 image: product.image || '',
                 user_id: currentUser?.email || 'admin'
@@ -188,7 +205,6 @@ async function deleteProduct(id) {
 
 // ================== RENDER LOGIN PAGE ==================
 function renderLoginPage() {
-    // Sembunyikan footer
     document.getElementById('mainFooter').style.display = 'none';
     
     mainContainer.innerHTML = `
@@ -252,8 +268,6 @@ function attachLoginEvents() {
         showLoading();
         
         try {
-            // Login via Supabase Auth
-            // Asumsi email = username + '@zizuel.local'
             const email = username.includes('@') ? username : username + '@zizuel.local';
             
             const { data, error } = await supabaseClient.auth.signInWithPassword({
@@ -264,7 +278,6 @@ function attachLoginEvents() {
             if (error) throw error;
             
             if (data.user) {
-                // Cek role dari email
                 const role = data.user.email === ADMIN_EMAIL ? 'admin' : 'user';
                 
                 currentUser = {
@@ -321,7 +334,6 @@ function attachLoginEvents() {
         showLoading();
         
         try {
-            // Register via Supabase Auth
             const { data, error } = await supabaseClient.auth.signUp({
                 email: email,
                 password: password,
@@ -363,7 +375,6 @@ function attachLoginEvents() {
 async function renderMainPage() {
     showLoading();
     
-    // Tampilkan footer
     document.getElementById('mainFooter').style.display = 'block';
     
     await loadProducts();
@@ -390,23 +401,23 @@ async function renderMainPage() {
     
     mainContainer.innerHTML = header;
     
-    // Render produk
+    // ===== PERUBAHAN UTAMA: RENDER PRODUK DENGAN DESKRIPSI & HARGA BARU =====
     const productsGrid = document.getElementById('productsGrid');
     
     if (products.length === 0) {
         productsGrid.innerHTML = '<p style="text-align: center; color: #64748b; padding: 40px;">Belum ada produk</p>';
     } else {
         productsGrid.innerHTML = products.map(prod => {
-            const waText = `Permisi, saya ingin membeli ${encodeURIComponent(prod.nama)} senilai Rp ${prod.harga}`;
+            const waText = `Permisi, saya ingin membeli ${encodeURIComponent(prod.nama)} senilai ${formatHarga(prod.harga)}`;
             return `
                 <div class="product-card">
                     <img class="product-image" src="${prod.image || 'https://via.placeholder.com/280x180/2563eb/ffffff?text=ZIZUEL'}" 
                          onerror="this.src='https://via.placeholder.com/280x180/2563eb/ffffff?text=ZIZUEL'">
                     <div class="product-info">
                         <div class="product-name">${escapeHtml(prod.nama)}</div>
-                        <div class="product-desc">${escapeHtml(prod.deskripsi) || '—'}</div>
-                        <div class="product-price">Rp ${formatRupiah(prod.harga)}</div>
-                        <a class="btn-wa" href="https://wa.me/${WA_NUMBER}?text=${waText}" target="_blank">
+                        <div class="product-desc" onclick="toggleDesc(this)">${escapeHtml(prod.deskripsi) || '—'}</div>
+                        <div class="product-price">${formatHarga(prod.harga)}</div>
+                        <a class="btn-wa" href="https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(waText)}" target="_blank">
                             <i class="fab fa-whatsapp"></i> BELI VIA WA
                         </a>
                     </div>
@@ -415,7 +426,6 @@ async function renderMainPage() {
         }).join('');
     }
     
-    // Event listeners
     document.getElementById('navLogout').addEventListener('click', logout);
     
     const logoContainer = document.getElementById('logoContainer');
@@ -424,11 +434,9 @@ async function renderMainPage() {
         logoContainer.addEventListener('click', openAdminSidebar);
     }
     
-    // Set link Discord
     const discordLink = document.getElementById('discordLink');
     discordLink.href = 'https://discord.gg/zizuel';
     
-    // Play musik
     if (settings.music) {
         bgMusic.src = settings.music;
         bgMusic.play().catch(e => console.log('Autoplay blocked'));
@@ -442,7 +450,6 @@ function openAdminSidebar() {
     adminSidebar.classList.add('active');
     renderAdminProductList();
     
-    // Isi form dengan data yang ada
     document.getElementById('storeDescription').value = settings.description;
     document.getElementById('logoFileName').textContent = settings.logo ? 'Logo tersedia' : 'Belum ada file';
     document.getElementById('musicFileName').textContent = settings.music ? 'Musik tersedia' : 'Belum ada file';
@@ -467,7 +474,7 @@ async function renderAdminProductList() {
         <div class="admin-product-item">
             <div class="admin-product-info">
                 <strong>${escapeHtml(prod.nama)}</strong>
-                <small>Rp ${formatRupiah(prod.harga)}</small>
+                <small>${formatHarga(prod.harga)}</small>
             </div>
             <div class="admin-product-actions">
                 <button onclick="editProductHandler('${prod.id}')">EDIT</button>
@@ -485,17 +492,17 @@ window.editProductHandler = async (id) => {
     const newName = prompt('Nama produk:', prod.nama);
     if (newName === null) return;
     
-    const newPrice = prompt('Harga:', prod.harga);
+    const newPrice = prompt('Harga (bisa range 5000-20000):', prod.harga);
     if (newPrice === null) return;
     
-    const newDesc = prompt('Deskripsi:', prod.deskripsi || '');
+    const newDesc = prompt('Deskripsi (gunakan Enter untuk baris baru):', prod.deskripsi || '');
     
     showLoading();
     
     try {
         await updateProduct(id, {
             nama: newName.trim() || prod.nama,
-            harga: parseInt(newPrice) || prod.harga,
+            harga: newPrice.trim() || prod.harga,
             deskripsi: newDesc || prod.deskripsi
         });
         
@@ -532,7 +539,6 @@ window.deleteProductHandler = async (id) => {
 function initAdminEvents() {
     document.getElementById('closeSidebar').addEventListener('click', closeAdminSidebar);
     
-    // Save description
     document.getElementById('saveDescriptionBtn').addEventListener('click', async () => {
         const desc = document.getElementById('storeDescription').value.trim();
         if (desc) {
@@ -545,7 +551,6 @@ function initAdminEvents() {
         }
     });
     
-    // Logo upload
     document.getElementById('logoUpload').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (file && file.type.startsWith('image/')) {
@@ -563,7 +568,6 @@ function initAdminEvents() {
         }
     });
     
-    // Music upload
     document.getElementById('musicUpload').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (file && file.type === 'audio/mpeg') {
@@ -583,11 +587,10 @@ function initAdminEvents() {
         }
     });
     
-    // Add product
     document.getElementById('addProductBtn').addEventListener('click', () => {
         const name = document.getElementById('productName').value.trim();
         const price = document.getElementById('productPrice').value.trim();
-        const desc = document.getElementById('productDesc').value.trim();
+        const desc = document.getElementById('productDesc').value;
         const imageFile = document.getElementById('productImage').files[0];
         
         if (!name || !price) {
@@ -600,7 +603,7 @@ function initAdminEvents() {
             try {
                 await saveProduct({
                     nama: name,
-                    harga: parseInt(price) || 0,
+                    harga: price,
                     deskripsi: desc || '',
                     image: imageData || ''
                 });
@@ -632,7 +635,6 @@ function initAdminEvents() {
         }
     });
     
-    // Product image name display
     document.getElementById('productImage').addEventListener('change', function(e) {
         const fileName = e.target.files[0]?.name || 'Tidak ada';
         document.getElementById('productImageName').textContent = fileName;
@@ -648,7 +650,6 @@ async function logout() {
     bgMusic.src = '';
     closeAdminSidebar();
     
-    // Sembunyikan footer
     document.getElementById('mainFooter').style.display = 'none';
     
     renderLoginPage();
